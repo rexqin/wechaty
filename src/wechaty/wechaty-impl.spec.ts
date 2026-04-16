@@ -100,8 +100,12 @@ test('Wechaty interface', async t => {
 })
 
 test('ProtectedProperties', async t => {
-  type NotExistInWechaty = Exclude<AllProtectedProperty, keyof WechatyImpl | `_${string}`>
-  type NotExistTest = NotExistInWechaty extends never ? true : false
+  // `keyof EventEmitter` includes captureRejectionSymbol; class `keyof WechatyImpl` may not.
+  type NotExistInWechaty = Exclude<
+    AllProtectedProperty,
+    keyof WechatyImpl | `_${string}` | typeof import('events').EventEmitter.captureRejectionSymbol
+  >
+  type NotExistTest = [NotExistInWechaty] extends [never] ? true : false
 
   const noOneLeft: NotExistTest = true
   t.ok(noOneLeft, 'should match Wechaty properties for every protected property')
