@@ -53,6 +53,17 @@ jobs:
           test -n "${ACR_PASSWORD:-}" || { echo "::error::Infisical 缺少 ACR_PASSWORD"; exit 1; }
           test -n "${ACR_NAMESPACE:-}" || { echo "::error::Infisical 缺少 ACR_NAMESPACE"; exit 1; }
 
+      - name: Normalize ACR registry hostname
+        id: acr
+        run: |
+          set -euo pipefail
+          raw="${ACR_REGISTRY#https://}"
+          raw="${raw#http://}"
+          host="${raw%%/*}"
+          test -n "$host" || { echo "::error::无法从 ACR_REGISTRY 解析 registry 主机名"; exit 1; }
+          echo "login_registry=${host}" >> "$GITHUB_OUTPUT"
+          echo "image_root=${host}/${ACR_NAMESPACE}" >> "$GITHUB_OUTPUT"
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
         with:
@@ -64,12 +75,14 @@ jobs:
       - name: Login to Aliyun ACR
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.ACR_REGISTRY }}
+          registry: ${{ steps.acr.outputs.login_registry }}
           username: ${{ env.ACR_USERNAME }}
           password: ${{ env.ACR_PASSWORD }}
 
       - name: Compute image tags
         id: tags
+        env:
+          IMAGE_ROOT: ${{ steps.acr.outputs.image_root }}
         run: |
           set -euo pipefail
           VERSION=$(jq -r .version package.json)
@@ -81,7 +94,7 @@ jobs:
           else
             EXTRA_TAG=next
           fi
-          REG="${ACR_REGISTRY}/${ACR_NAMESPACE}"
+          REG="${IMAGE_ROOT}"
           echo "wechaty_image=${REG}/wechaty" >> "$GITHUB_OUTPUT"
           echo "version_tag=${VERSION_TAG}" >> "$GITHUB_OUTPUT"
           echo "extra_tag=${EXTRA_TAG}" >> "$GITHUB_OUTPUT"
