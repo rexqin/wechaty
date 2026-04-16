@@ -6,6 +6,10 @@ on: [push, pull_request]
 #       - main
 #       - 'v[0-9]+*'
 
+permissions:
+  contents: read
+  id-token: write
+
 jobs:
   build:
     name: Build
@@ -32,6 +36,22 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
+      - name: Fetch secrets from Infisical
+        uses: Infisical/secrets-action@v1.0.15
+        with:
+          method: oidc
+          identity-id: ${{ secrets.INFISICAL_IDENTITY_ID }}
+          project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
+          env-slug: prod
+          secret-path: /wechaty/ci
+
+      - name: Validate required ACR secrets
+        run: |
+          test -n "${ACR_REGISTRY:-}" || { echo "::error::Infisical 缺少 ACR_REGISTRY"; exit 1; }
+          test -n "${ACR_USERNAME:-}" || { echo "::error::Infisical 缺少 ACR_USERNAME"; exit 1; }
+          test -n "${ACR_PASSWORD:-}" || { echo "::error::Infisical 缺少 ACR_PASSWORD"; exit 1; }
+          test -n "${ACR_NAMESPACE:-}" || { echo "::error::Infisical 缺少 ACR_NAMESPACE"; exit 1; }
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
         with:
@@ -49,7 +69,6 @@ jobs:
       - name: Available platforms
         run: echo ${{ steps.buildx.outputs.platforms }}
 
-      - name: Login to DockerHub Registry
-        run: echo ${{ secrets.DOCKER_PERSONAL_ACCESS_TOKEN }} | docker login -u zixia --password-stdin
-      - name: Deploy to Docker Hub
-        run: ./scripts/docker.sh deploy
+      - name: Login to Aliyun ACR
+        run: echo "${ACR_PASSWORD}" | docker login "${ACR_REGISTRY}" -u "${ACR_USERNAME}" --password-stdin
+

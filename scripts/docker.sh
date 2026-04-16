@@ -3,6 +3,8 @@
 set -eo pipefail
 
 export ARTIFACT_IMAGE='wechaty/wechaty:artifact'
+export IMAGE_REPO="${IMAGE_REPO:-wechaty/wechaty}"
+export ONBUILD_REPO="${ONBUILD_REPO:-wechaty/onbuild}"
 
 function dockerBuild () {
   platform=$1     # `all` for all platforms, `linux/amd64`, `linux/arm64`, etc.
@@ -27,19 +29,19 @@ _CMD_
   docker buildx build \
     "${options[@]}" \
     --platform "$platform" \
-    --tag "wechaty/wechaty:$tag" \
+    --tag "$IMAGE_REPO:$tag" \
     .
 }
 
 function deployOnbuild () {
   export tag=$1
 
-  echo "Building & Deploying 'wechaty/onbuild:$tag' based on 'wechaty/wechaty:$tag'"
+  echo "Building & Deploying '$ONBUILD_REPO:$tag' based on '$IMAGE_REPO:$tag'"
 
-  sed "s#FROM wechaty/wechaty:next#FROM wechaty/wechaty:$tag#" < Dockerfile.onbuild \
+  sed "s#FROM wechaty/wechaty:next#FROM $IMAGE_REPO:$tag#" < Dockerfile.onbuild \
     | docker buildx build \
       --platform 'linux/amd64,linux/arm64,linux/arm/v7' \
-      --tag "wechaty/onbuild:$tag" \
+      --tag "$ONBUILD_REPO:$tag" \
       --push \
       -
 }

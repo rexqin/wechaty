@@ -1,0 +1,48 @@
+# Docker Swarm：接入已有 overlay 网络 ibb8-net
+# 镜像：阿里云 ACR，与 .github/workflows/docker.yml（Infisical prod /wechaty/ci）一致
+#   部署前导出或在 .env 中设置 ACR_REGISTRY、ACR_NAMESPACE（以及可选 ACR_IMAGE_NAME、WECHATY_TAG）
+#   解析为：<ACR_REGISTRY>/<ACR_NAMESPACE>/<ACR_IMAGE_NAME>:<WECHATY_TAG>
+#   例：registry.cn-hangzhou.aliyuncs.com/my-company/wechaty:latest
+# 若仓库名不是 wechaty，改 ACR_IMAGE_NAME；若必须用整条镜像地址，可改下一行 image 为 ${WECHATY_IMAGE} 并自行赋值
+# 部署：docker stack deploy -c docker-compose.yml wechaty
+#
+# 运行方式（与 bin/entrypoint.sh 一致）：
+#   - 设置 WECHATY_TOKEN → 未传参数时默认执行 io-client
+#   - 跑本地 bot：挂载目录到 /bot，并设置 command，例如 command: ["index.js"]
+#   本地可参考：docker run -i --rm -v /dev/shm:/dev/shm -v "$(pwd)":/bot <ACR 完整镜像> index.js
+
+services:
+  wechaty:
+    image: ${ACR_REGISTRY:?未设置 ACR_REGISTRY}/${ACR_NAMESPACE:?未设置 ACR_NAMESPACE}/${ACR_IMAGE_NAME:-wechaty}:${WECHATY_TAG:-latest}
+    environment:
+      WECHATY_TOKEN: ${WECHATY_TOKEN:-}
+      WECHATY_LOG: ${WECHATY_LOG:-info}
+      TZ: ${TZ:-Asia/Shanghai}
+    # 与 docker.sh / CI 测试中的 docker run -v /dev/shm:/dev/shm 一致，满足 Chromium 等共享内存需求
+    shm_size: "2gb"
+    working_dir: /bot
+    # 需要跑 bot 脚本时取消注释并填写主机路径（Swarm 各节点需可访问同一路径或改用 NFS/configs）
+    # volumes:
+    #   - type: bind
+    #     source: /path/on/host/bot
+    #     target: /bot
+    #     read_only: true
+    # command: ["index.js"]
+    networks:
+      - ibb8-net
+    deploy:
+      mode: replicated
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+
+networks:
+  ibb8-net:
+    external: true
+    name: ibb8-net
